@@ -1,6 +1,6 @@
 <Bindings>
     <Binding name="CLICK WicksBeastsFeedButton:LeftButton" header="WICKSBEASTS" category="ADDONS"/>
-    <Binding name="WICKSBEASTS_TOGGLE" header="WICKSBEASTS" category="ADDONS">
+    <Binding name="WICKSBEASTS_TOGGLE" category="ADDONS">
         if WicksBeastsAndThings_Toggle then WicksBeastsAndThings_Toggle() end
     </Binding>
 </Bindings>

@@ -239,7 +239,7 @@ end
 
 function UI:RefreshStrip()
     local f = self.strip
-    if not f or not f:IsShown() then return end
+    if not f or not f.ammoText or not f:IsShown() then return end
     local s = ns.Pet:State()
     local h = s.exists and s.happiness or nil
     for i = 1, 3 do
@@ -401,8 +401,10 @@ end
 
 function UI:RefreshFeed(food)
     food = food or ns.Pet.lastFood
+    -- Registering a feed button triggers this before its panel is finished,
+    -- so each half checks that its regions exist.
     local p, f = self.panel, self.strip
-    if p then
+    if p and p.feed and p.feed.label then
         if food then
             p.feed.icon:SetTexture(food.icon or QUESTION)
             p.feed.icon:Show()
@@ -414,7 +416,7 @@ function UI:RefreshFeed(food)
             tint(p.feed.label, C.muted)
         end
     end
-    if f then
+    if f and f.feed and f.feed.count then
         if food then
             f.feed.icon:SetTexture(food.icon or QUESTION)
             f.feed.icon:SetDesaturated(false)
@@ -452,14 +454,14 @@ function UI:RefreshAmmo()
     end
 
     local p = self.panel
-    if p and p:IsShown() then
+    if p and p.ammoText and p:IsShown() then
         if a.itemID and a.needed then p.ammoIcon:SetTexture(a.icon or QUESTION); p.ammoIcon:Show() else p.ammoIcon:Hide() end
         p.ammoText:SetText(text)
         tint(p.ammoText, color)
         p.ammoNote:SetText(note)
     end
     local f = self.strip
-    if f and f:IsShown() then
+    if f and f.ammoText and f:IsShown() then
         if a.itemID and a.needed then
             f.ammoIcon:SetTexture(a.icon or QUESTION)
             f.ammoIcon:SetDesaturated(false)

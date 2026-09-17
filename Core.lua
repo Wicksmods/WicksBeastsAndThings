@@ -20,6 +20,9 @@ local PROFILE_DEFAULTS = {
     ammoWarn      = 200,     -- the ammo row turns red below this many shots
     foodItem      = false,   -- itemID to feed instead of the best food found
     preferCheap   = false,   -- lowest eligible food instead of the highest
+    showStrip     = true,    -- the compact strip that stays on screen
+    stripLocked   = true,
+    strip         = {},
     window        = {},
     kitWindow     = {},
 }
@@ -73,6 +76,7 @@ ns.SPELL = {
 function A:OnInitialize()
     ns.db = self.db
     self.db:On("OnProfileChanged", function()
+        if ns.UI and ns.UI.ApplyStripVisibility then ns.UI:ApplyStripVisibility() end
         if ns.UI and ns.UI.Refresh then ns.UI:Refresh() end
         if ns.Pet and ns.Pet.UpdateFeedMacro then ns.Pet:UpdateFeedMacro() end
     end)
@@ -131,7 +135,13 @@ function A:OnEnable()
     self:RegisterOptions(function(page, addon)
         local O = Core.Options
         local db = addon.db.profile
-        local y = O:Heading(page, "Feeding", 0)
+        local y = O:Heading(page, "Strip", 0)
+        y = O:Check(page, "Show the compact strip", function() return db.showStrip ~= false end,
+            function(v) db.showStrip = v; ns.UI:ApplyStripVisibility() end, y)
+        y = O:Check(page, "Lock the strip", function() return db.stripLocked ~= false end,
+            function(v) db.stripLocked = v end, y)
+        y = O:Note(page, "One row: pet happiness and name, the feed button, ammo. Hover any part for detail, right-click for the full panel.", y)
+        y = O:Heading(page, "Feeding", y - 6)
         y = O:Check(page, "Prefer the cheapest eligible food", function() return db.preferCheap == true end,
             function(v) db.preferCheap = v; ns.Pet:UpdateFeedMacro(); ns.UI:Refresh() end, y)
         y = O:Note(page, "The feed key picks the best food in your bags that the pet will eat. Pin one with /wbt food <item link>, clear it with /wbt food clear.", y)
@@ -156,6 +166,14 @@ A:RegisterSlash(function(_, msg)
     msg = (msg or ""):gsub("^%s+", ""):gsub("%s+$", "")
     local lower = msg:lower()
     if lower == "" or lower == "show" or lower == "toggle" then ns.UI:Toggle() return end
+    if lower == "strip" then
+        A.db.profile.showStrip = not (A.db.profile.showStrip ~= false)
+        ns.UI:ApplyStripVisibility()
+        A:Print("strip " .. (A.db.profile.showStrip and "shown" or "hidden") .. ".")
+        return
+    end
+    if lower == "unlock" or lower == "move" then ns.UI:SetStripLocked(false) return end
+    if lower == "lock" then ns.UI:SetStripLocked(true) return end
     if lower == "kit" or lower == "talents" or lower == "checklist" then A.kit:Toggle() return end
     if lower == "options" or lower == "config" then A:OpenOptions() return end
     local db = A.db.profile
@@ -199,5 +217,5 @@ A:RegisterSlash(function(_, msg)
         A:Print("feed macro: " .. (ns.Pet.lastMacro or ""):gsub("\n", " | "))
         return
     end
-    A:Print("commands: show | kit | options | ammo <count> | food [link|clear] | status")
+    A:Print("commands: show | strip | lock | unlock | kit | options | ammo <count> | food [link|clear] | status")
 end, "/wbt", "/wbeasts")

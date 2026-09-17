@@ -8,7 +8,6 @@
 ## X-Website: https://wicksmods.com
 ## X-WickCore: WickCore-1.0
 
-Bindings.xml
 Core.lua
 Pet.lua
 Ammo.lua

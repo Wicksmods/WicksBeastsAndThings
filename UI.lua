@@ -166,9 +166,10 @@ function UI:BuildStrip()
     local div1 = Chrome:Texture(f, "ARTWORK", C.border)
     div1:SetPoint("TOPLEFT", pet, "TOPRIGHT", 0, -1); div1:SetPoint("BOTTOMLEFT", pet, "BOTTOMRIGHT", 0, 1); div1:SetWidth(1)
 
-    -- Feed segment: the food icon is the button
+    -- Feed segment: the food icon is the button. It is a protected frame,
+    -- so it anchors to the pet segment frame, never to a texture.
     local feed = makeSecureFeed(f)
-    feed:SetPoint("LEFT", div1, "RIGHT", 2, 0)
+    feed:SetPoint("LEFT", pet, "RIGHT", 3, 0)
     feed:SetSize(FEED_W - 4, STRIP_H - 4)
     feed.icon = feed:CreateTexture(nil, "ARTWORK")
     feed.icon:SetAllPoints()

@@ -52,10 +52,20 @@ function Ammo:State()
             local ok, n = pcall(GetInventoryItemCount, "player", INV_AMMO)
             s.count = (ok and plain(n)) or 0
         end
-        s.bagCount = D.GetItemCount(id, false) or 0
+        local inBags = D.GetItemCount(id, false) or 0
+        -- Whether the bag count includes the equipped stack differs by
+        -- client. When it does, the two reads are the same number and
+        -- adding them would double count, so treat the larger as the
+        -- total and the difference as the spares.
+        if inBags >= s.count then
+            s.total, s.spare = inBags, inBags - s.count
+        else
+            s.total, s.spare = s.count + inBags, inBags
+        end
+        s.bagCount = s.spare
         if s.fires and s.ammoType and s.ammoType ~= s.fires then s.mismatch = true end
     end
-    s.total = (s.count or 0) + (s.bagCount or 0)
+    s.total = s.total or 0
     return s
 end
 

@@ -77,13 +77,14 @@ local function ammoLines(tt, a)
         return
     end
     tt:AddLine(a.name, 1, 1, 1)
-    tt:AddLine(("%d equipped, %d in bags"):format(a.count or 0, a.bagCount or 0), 0.83, 0.78, 0.63)
+    tt:AddLine((a.spare or 0) > 0 and ("%d equipped, %d spare in bags"):format(a.count or 0, a.spare)
+        or ("%d shots"):format(a.total or 0), 0.83, 0.78, 0.63)
     local warn = ns.db and ns.db.profile.ammoWarn or 200
     if a.mismatch then
         tt:AddLine(("Wrong ammo: %s fires %ss."):format(a.weapon or "your weapon", (a.fires or ""):lower()), RED[1], RED[2], RED[3])
     elseif (a.total or 0) < warn then
         tt:AddLine(("Below %d shots. Restock."):format(warn), RED[1], RED[2], RED[3])
-    elseif (a.count or 0) < warn then
+    elseif (a.spare or 0) > 0 and (a.count or 0) < warn then
         tt:AddLine("Equipped stack is low; spares in bags.", AMBER[1], AMBER[2], AMBER[3])
     end
 end
@@ -102,7 +103,7 @@ end
 local STRIP_H  = 26
 local PET_W    = 118
 local FEED_W   = 26
-local AMMO_W   = 74
+local AMMO_W   = 96
 local PAD      = 6
 
 function UI:BuildStrip()
@@ -442,12 +443,13 @@ function UI:RefreshAmmo()
         color, text = RED, "Ammo slot empty"
         note = a.fires and ("Your %s fires %ss."):format(a.weaponType or "weapon", a.fires:lower()) or ""
     else
-        text = ("%s  %d equipped, %d in bags"):format(a.name, a.count or 0, a.bagCount or 0)
+        text = (a.spare or 0) > 0 and ("%s  %d equipped, %d spare"):format(a.name, a.count or 0, a.spare)
+            or ("%s  %d shots"):format(a.name, a.total or 0)
         if a.mismatch then
             color, note = RED, ("Wrong ammo: %s fires %ss."):format(a.weapon or "your weapon", (a.fires or ""):lower())
         elseif (a.total or 0) < warn then
             color, note = RED, ("Below %d shots. Restock."):format(warn)
-        elseif (a.count or 0) < warn then
+        elseif (a.spare or 0) > 0 and (a.count or 0) < warn then
             color, note = AMBER, "Equipped stack is low; spares in bags."
         else
             color, note = C.text, ""
@@ -468,7 +470,7 @@ function UI:RefreshAmmo()
             f.ammoIcon:SetDesaturated(false)
             f.ammoIcon:SetAlpha(1)
             local n = a.count or 0
-            f.ammoText:SetText((a.bagCount or 0) > 0 and ("%d +%d"):format(n, a.bagCount) or tostring(n))
+            f.ammoText:SetText((a.spare or 0) > 0 and ("%d +%d"):format(n, a.spare) or tostring(a.total or n))
         else
             f.ammoIcon:SetTexture("Interface\\Icons\\INV_Ammo_Arrow_01")
             f.ammoIcon:SetDesaturated(true)

@@ -81,6 +81,8 @@ function A:OnInitialize()
         if ns.Pet and ns.Pet.UpdateFeedMacro then ns.Pet:UpdateFeedMacro() end
     end)
 
+    Core.Cooldowns:New(self, { key = "cooldownBar" })
+
     Core.Kit:New(self, {
         racials = true,
         checklist = {
@@ -120,6 +122,7 @@ function A:OnEnable()
     if ns.Pet and ns.Pet.Init then ns.Pet:Init() end
     if ns.Ammo and ns.Ammo.Init then ns.Ammo:Init() end
     if ns.UI and ns.UI.Init then ns.UI:Init() end
+    if self.cooldowns then self.cooldowns:Init() end
 
     self:RegisterLauncher({
         onClick = function(_, button)
@@ -175,6 +178,7 @@ A:RegisterSlash(function(_, msg)
     if lower == "unlock" or lower == "move" then ns.UI:SetStripLocked(false) return end
     if lower == "lock" then ns.UI:SetStripLocked(true) return end
     if lower == "kit" or lower == "talents" or lower == "checklist" then A.kit:Toggle() return end
+    if lower == "cd" or lower:match("^cd%s") then return A.cooldowns:Command(msg:match("^%a+%s*(.*)$")) end
     if lower == "options" or lower == "config" then A:OpenOptions() return end
     local db = A.db.profile
     if lower:match("^ammo") then
@@ -217,5 +221,5 @@ A:RegisterSlash(function(_, msg)
         A:Print("feed macro: " .. (ns.Pet.lastMacro or ""):gsub("\n", " | "))
         return
     end
-    A:Print("commands: show | strip | lock | unlock | kit | options | ammo <count> | food [link|clear] | status")
+    A:Print("commands: show | strip | lock | unlock | kit | cd | options | ammo <count> | food [link|clear] | status")
 end, "/wbt", "/wbeasts")

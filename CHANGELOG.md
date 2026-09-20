@@ -5,6 +5,8 @@
 - Beast atlas. Reads your pet's spell book whenever one is out and files
   what it found under that pet's family, then names a family's abilities
   in the tooltip of any beast of that family. /wbt beasts to list.
+- A Beasts tab in the kit window showing the whole roster, what sets
+  each family apart, and what they all carry.
 
 ## 0.1.0 - 2026-09-17 (Forever, beta)
 

@@ -224,6 +224,100 @@ function Beasts:Report(print_)
     end
 end
 
+-- ============================================================
+-- The Beasts tab in the kit window
+-- ============================================================
+
+local ROW_H = 16
+
+function Beasts:AttachPane(pane)
+    self.pane = pane
+
+    pane.note = Chrome:Text(pane, 10, C.muted)
+    pane.note:SetPoint("TOPLEFT", 0, 0)
+    pane.note:SetWidth(380)
+    pane.note:SetJustifyH("LEFT")
+    pane.note:SetText("Nothing in the game says which family brings which ability, so this reads your pet's spell book whenever one is out. Bracketed abilities are the ones most families carry.")
+
+    pane.count = Chrome:Text(pane, 11, C.text)
+    pane.count:SetPoint("TOPLEFT", 0, -34)
+
+    -- Clip the list so a long roster scrolls rather than running out of
+    -- the window.
+    local clip = CreateFrame("ScrollFrame", nil, pane)
+    clip:SetPoint("TOPLEFT", 0, -54)
+    clip:SetPoint("BOTTOMRIGHT", 0, 24)
+    local list = CreateFrame("Frame", nil, clip)
+    list:SetSize(1, 1)
+    clip:SetScrollChild(list)
+    clip:EnableMouseWheel(true)
+    clip:SetScript("OnMouseWheel", function(f, delta)
+        local range = math.max(0, (tonumber(list:GetHeight()) or 0) - (tonumber(f:GetHeight()) or 0))
+        if range <= 0 then return end
+        f:SetVerticalScroll(math.min(range, math.max(0, (tonumber(f:GetVerticalScroll()) or 0) - delta * 24)))
+    end)
+    pane.clip, pane.list, pane.rows = clip, list, {}
+
+    local forget = Chrome:Button(pane, "Forget all", 80, 20)
+    forget:SetPoint("BOTTOMLEFT", 0, 0)
+    forget:SetScript("OnClick", function()
+        Beasts:Forget()
+        Beasts:RefreshPane()
+    end)
+
+    pane:SetScript("OnShow", function() Beasts:RefreshPane() end)
+    self:RefreshPane()
+end
+
+local function paneRow(pane, i)
+    local r = pane.rows[i]
+    if r then return r end
+    r = CreateFrame("Frame", nil, pane.list)
+    r:SetHeight(ROW_H)
+    r:SetPoint("TOPLEFT", 0, -(i - 1) * ROW_H)
+    r:SetPoint("TOPRIGHT", 0, -(i - 1) * ROW_H)
+    r.family = Chrome:Text(r, 11, C.text)
+    r.family:SetPoint("LEFT", 0, 0)
+    r.family:SetWidth(90)
+    r.family:SetJustifyH("LEFT")
+    r.abilities = Chrome:Text(r, 11, C.fel)
+    r.abilities:SetPoint("LEFT", 94, 0)
+    r.abilities:SetWidth(250)
+    r.abilities:SetJustifyH("LEFT")
+    pane.rows[i] = r
+    return r
+end
+
+function Beasts:RefreshPane()
+    local pane = self.pane
+    if not pane then return end
+    local names = self:Families()
+    local _, total = self:CommonNames()
+
+    if #names == 0 then
+        pane.count:SetText("Nothing recorded yet. Tame a beast and its family is filed on its own.")
+    elseif total < COMMON_AT then
+        pane.count:SetText(("%d recorded. At %d, the abilities they share stop standing out."):format(total, COMMON_AT))
+    else
+        pane.count:SetText(("%d families recorded."):format(total))
+    end
+
+    for _, r in ipairs(pane.rows) do r:Hide() end
+    for i, family in ipairs(names) do
+        local r = paneRow(pane, i)
+        local special, shared = self:Known(family)
+        r.family:SetText(family)
+        local bits = {}
+        if #special > 0 then bits[#bits + 1] = table.concat(special, ", ") end
+        if #shared > 0 then bits[#bits + 1] = "|cff8a8270(" .. table.concat(shared, ", ") .. ")|r" end
+        r.abilities:SetText(#bits > 0 and table.concat(bits, "  ") or "nothing recorded")
+        r:Show()
+    end
+    pane.list:SetHeight(math.max(1, #names * ROW_H))
+    local w = tonumber(pane.clip:GetWidth())
+    if w and w > 0 then pane.list:SetWidth(w) end
+end
+
 function Beasts:Init()
     self:HookTooltip()
     ns.RegisterEvents({ "UNIT_PET", "PET_BAR_UPDATE", "PLAYER_ENTERING_WORLD", "SPELLS_CHANGED" })

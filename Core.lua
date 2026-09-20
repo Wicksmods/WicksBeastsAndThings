@@ -86,6 +86,10 @@ function A:OnInitialize()
 
     Core.Kit:New(self, {
         racials = true,
+        tabs = {
+            { id = "beasts", label = "Beasts",
+              attach = function(pane) if ns.beasts then ns.beasts:AttachPane(pane) end end },
+        },
         checklist = {
             { label = "Aspect up",
               aura = { "Aspect of the Hawk", "Aspect of the Monkey", "Aspect of the Cheetah",

@@ -1,5 +1,11 @@
 # Wick's Beasts and Things - Changelog
 
+## Unreleased
+
+- Beast atlas. Reads your pet's spell book whenever one is out and files
+  what it found under that pet's family, then names a family's abilities
+  in the tooltip of any beast of that family. /wbt beasts to list.
+
 ## 0.1.0 - 2026-09-17 (Forever, beta)
 
 ### First cut of the hunter kit on WickCore

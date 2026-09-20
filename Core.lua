@@ -20,6 +20,7 @@ local PROFILE_DEFAULTS = {
     ammoWarn      = 200,     -- the ammo row turns red below this many shots
     foodItem      = false,   -- itemID to feed instead of the best food found
     preferCheap   = false,   -- lowest eligible food instead of the highest
+    beastTooltip  = true,    -- name a beast family's abilities in its tooltip
     showStrip     = true,    -- the compact strip that stays on screen
     stripLocked   = true,
     strip         = {},
@@ -123,6 +124,7 @@ function A:OnEnable()
     if ns.Ammo and ns.Ammo.Init then ns.Ammo:Init() end
     if ns.UI and ns.UI.Init then ns.UI:Init() end
     if self.cooldowns then self.cooldowns:Init() end
+    if ns.beasts then ns.beasts:Init() end
 
     self:RegisterLauncher({
         onClick = function(_, button)
@@ -152,6 +154,8 @@ function A:OnEnable()
         y = O:Note(page, ("Warn below %d shots. Change it with /wbt ammo <count>."):format(db.ammoWarn or 200), y)
         y = O:Button(page, "Open panel", function() ns.UI:Toggle() end, y, 100)
         y = O:Button(page, "Open kit", function() addon.kit:Toggle() end, y, 100)
+        if ns.beasts then y = ns.beasts:OptionRow(page, y - 6) end
+        if addon.cooldowns then y = addon.cooldowns:OptionRow(page, y - 6) end
         y = O:ProfileSection(page, addon, y - 8)
     end)
 end
@@ -179,6 +183,19 @@ A:RegisterSlash(function(_, msg)
     if lower == "lock" then ns.UI:SetStripLocked(true) return end
     if lower == "kit" or lower == "talents" or lower == "checklist" then A.kit:Toggle() return end
     if lower == "cd" or lower:match("^cd%s") then return A.cooldowns:Command(msg:match("^%a+%s*(.*)$")) end
+    if lower == "beasts" or lower:match("^beasts%s") then
+        local rest = msg:match("^%a+%s+(.*)$")
+        if rest == "clear" then
+            ns.beasts:Forget()
+            A:Print("beast atlas cleared.")
+        elseif rest and rest ~= "" then
+            if ns.beasts:Forget(rest) then A:Print("forgot " .. rest .. ".")
+            else A:Print("nothing recorded for " .. rest .. ".") end
+        else
+            ns.beasts:Report(function(line) A:Print(line) end)
+        end
+        return
+    end
     if lower == "options" or lower == "config" then A:OpenOptions() return end
     local db = A.db.profile
     if lower:match("^ammo") then

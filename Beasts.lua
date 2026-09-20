@@ -1,0 +1,257 @@
+-- Wick's Beasts and Things
+-- Beasts.lua: which family brings which ability.
+--
+-- There is no API for this. The client knows what your current pet can do
+-- and it knows what family a beast belongs to, but nothing joins the two,
+-- and Beast Lore on this build reports damage, health, armor, resistances
+-- and diet, with no mention of abilities.
+--
+-- So this does the join itself. Whenever a pet is out it reads the pet
+-- spell book and files what it found under that pet's family. After that,
+-- pointing at any beast of a family you have tamed says what it brings.
+--
+-- Built by watching rather than shipped as a table, on purpose. A table
+-- copied out of Burning Crusade would be a guess about Forever. This is
+-- right by construction on whatever the client actually does.
+
+local ADDON, ns = ...
+local Core = WickCore
+local Chrome = Core.Chrome
+local C = Chrome.Colors
+
+local Beasts = {}
+ns.beasts = Beasts
+
+-- An ability this many families share is plumbing, not a reason to tame.
+local COMMON_AT = 3
+
+local function store()
+    local A = ns.A
+    if not (A and A.db and A.db.global) then return nil end
+    A.db.global.families = A.db.global.families or {}
+    return A.db.global.families
+end
+
+local function petSpells()
+    local out = {}
+    local SB = rawget(_G, "C_SpellBook")
+    local bank = Enum and Enum.SpellBookSpellBank and Enum.SpellBookSpellBank.Pet
+
+    if SB and SB.HasPetSpells and SB.GetSpellBookItemInfo and bank then
+        local ok, n = pcall(SB.HasPetSpells)
+        if not ok or type(n) ~= "number" then return out end
+        for i = 1, n do
+            local got, info = pcall(SB.GetSpellBookItemInfo, i, bank)
+            if got and type(info) == "table" and info.name and info.name ~= "" then
+                out[#out + 1] = { name = info.name, passive = info.isPassive and true or false }
+            end
+        end
+        return out
+    end
+
+    -- Older dialect: both of these are plain globals and the book is
+    -- addressed by the string "pet" rather than a bank enum.
+    local has = rawget(_G, "HasPetSpells")
+    local nameOf = rawget(_G, "GetSpellBookItemName") or rawget(_G, "GetSpellName")
+    if not (has and nameOf) then return out end
+    local ok, n = pcall(has)
+    if not ok or type(n) ~= "number" then return out end
+    local isPassive = rawget(_G, "IsPassiveSpell")
+    for i = 1, n do
+        local got, name = pcall(nameOf, i, "pet")
+        if got and type(name) == "string" and name ~= "" then
+            local passive = false
+            if isPassive then
+                local pok, p = pcall(isPassive, i, "pet")
+                passive = pok and p and true or false
+            end
+            out[#out + 1] = { name = name, passive = passive }
+        end
+    end
+    return out
+end
+
+-- File whatever the pet that is out can do, under its family.
+function Beasts:Record()
+    local fams = store()
+    if not fams then return end
+    if not (UnitExists and UnitExists("pet")) then return end
+    local family = UnitCreatureFamily and UnitCreatureFamily("pet")
+    if not family or family == "" then return end
+
+    local spells = petSpells()
+    if #spells == 0 then return end
+
+    local rec = fams[family] or { abilities = {} }
+    rec.abilities = rec.abilities or {}
+    local added = {}
+    for _, s in ipairs(spells) do
+        if rec.abilities[s.name] == nil then added[#added + 1] = s.name end
+        rec.abilities[s.name] = s.passive and "passive" or "active"
+    end
+    rec.seen = (rec.seen or 0) + 1
+    fams[family] = rec
+
+    if #added > 0 and self.announced ~= family then
+        self.announced = family
+        table.sort(added)
+        ns.A:Print(("%s noted: %s"):format(family, table.concat(added, ", ")))
+    end
+end
+
+-- What most families carry is plumbing. Worked out from what has been
+-- recorded rather than assumed, so it sharpens as more beasts are tamed.
+function Beasts:CommonNames()
+    local fams = store()
+    local count, total = {}, 0
+    if not fams then return count, 0 end
+    for _, rec in pairs(fams) do
+        total = total + 1
+        for name in pairs(rec.abilities or {}) do count[name] = (count[name] or 0) + 1 end
+    end
+    local common = {}
+    for name, n in pairs(count) do
+        if n >= COMMON_AT then common[name] = true end
+    end
+    return common, total
+end
+
+-- What a family brings: the ones that set it apart, then the rest.
+function Beasts:Known(family)
+    local fams = store()
+    local rec = fams and family and fams[family]
+    if not rec then return nil end
+    local common = self:CommonNames()
+    local special, shared = {}, {}
+    for name in pairs(rec.abilities or {}) do
+        table.insert(common[name] and shared or special, name)
+    end
+    table.sort(special)
+    table.sort(shared)
+    return special, shared, rec.seen or 0
+end
+
+function Beasts:Families()
+    local fams = store()
+    local names = {}
+    if fams then for name in pairs(fams) do names[#names + 1] = name end end
+    table.sort(names)
+    return names
+end
+
+function Beasts:Forget(family)
+    local fams = store()
+    if not fams then return false end
+    if family then
+        local had = fams[family] ~= nil
+        fams[family] = nil
+        return had
+    end
+    for k in pairs(fams) do fams[k] = nil end
+    return true
+end
+
+-- ============================================================
+-- Tooltip
+-- ============================================================
+
+local function describe(family)
+    local special, shared = Beasts:Known(family)
+    if not special then return nil end
+    if #special > 0 then return table.concat(special, ", ") end
+    if #shared > 0 then return table.concat(shared, ", ") end
+    return nil
+end
+
+function Beasts:DecorateUnit(tt, unit)
+    if not unit then return end
+    local db = ns.A and ns.A.db and ns.A.db.profile
+    if db and db.beastTooltip == false then return end
+    if not (UnitCreatureType and UnitCreatureType(unit) == "Beast") then return end
+    local family = UnitCreatureFamily and UnitCreatureFamily(unit)
+    if not family or family == "" then return end
+    local line = describe(family)
+    if line then
+        tt:AddLine(("%s: %s"):format(family, line), C.fel[1], C.fel[2], C.fel[3])
+    else
+        tt:AddLine(("%s: not tamed yet"):format(family), C.muted[1], C.muted[2], C.muted[3])
+    end
+end
+
+function Beasts:HookTooltip()
+    local TDP = rawget(_G, "TooltipDataProcessor")
+    local dataType = Enum and Enum.TooltipDataType and Enum.TooltipDataType.Unit
+    if TDP and TDP.AddTooltipPostCall and dataType then
+        TDP.AddTooltipPostCall(dataType, function(tt)
+            local TU = rawget(_G, "TooltipUtil")
+            local unit
+            if TU and TU.GetDisplayedUnit then
+                local _, u = TU.GetDisplayedUnit(tt)
+                unit = u
+            end
+            Core.safe(Beasts.DecorateUnit, Beasts, tt, unit)
+        end)
+        return
+    end
+    local gt = rawget(_G, "GameTooltip")
+    if gt and gt.HookScript then
+        gt:HookScript("OnTooltipSetUnit", function(tt)
+            local _, unit = tt:GetUnit()
+            Core.safe(Beasts.DecorateUnit, Beasts, tt, unit)
+        end)
+    end
+end
+
+-- ============================================================
+
+function Beasts:Report(print_)
+    local names = self:Families()
+    if #names == 0 then
+        print_("no beasts recorded yet. Tame one and its family is noted on its own.")
+        return
+    end
+    local _, total = self:CommonNames()
+    print_(("%d famil%s recorded:"):format(total, total == 1 and "y" or "ies"))
+    for _, family in ipairs(names) do
+        local special, shared = self:Known(family)
+        local bits = {}
+        if #special > 0 then bits[#bits + 1] = table.concat(special, ", ") end
+        if #shared > 0 then bits[#bits + 1] = "(" .. table.concat(shared, ", ") .. ")" end
+        print_(("  %s: %s"):format(family, #bits > 0 and table.concat(bits, "  ") or "nothing recorded"))
+    end
+    if total < COMMON_AT then
+        print_(("Anything %d families share gets bracketed as ordinary. Not enough recorded to tell yet."):format(COMMON_AT))
+    end
+end
+
+function Beasts:Init()
+    self:HookTooltip()
+    ns.RegisterEvents({ "UNIT_PET", "PET_BAR_UPDATE", "PLAYER_ENTERING_WORLD", "SPELLS_CHANGED" })
+    local function later()
+        if C_Timer and C_Timer.After then
+            C_Timer.After(1, function() Core.safe(Beasts.Record, Beasts) end)
+        else
+            Core.safe(Beasts.Record, Beasts)
+        end
+    end
+    ns:On("UNIT_PET", function(_, unit)
+        if unit == "player" then Beasts.announced = nil; later() end
+    end)
+    ns:On("PET_BAR_UPDATE", later)
+    ns:On("SPELLS_CHANGED", later)
+    ns:On("PLAYER_ENTERING_WORLD", later)
+    -- A reload with a pet already out sends no UNIT_PET, so read once on
+    -- the way up rather than waiting for the beast to be dismissed first.
+    later()
+end
+
+function Beasts:OptionRow(page, y)
+    local O = Core.Options
+    local db = ns.A.db.profile
+    y = O:Heading(page, "Beast atlas", y)
+    y = O:Check(page, "Name a beast's abilities in its tooltip",
+        function() return db.beastTooltip ~= false end,
+        function(v) db.beastTooltip = v end, y)
+    y = O:Note(page, "Nothing in the game lists which family brings which ability, so this builds the list by reading your pet's spell book whenever one is out. Point at any beast of a family you have tamed and its tooltip names what that family brings. Use /wbt beasts for everything recorded.", y)
+    return y
+end

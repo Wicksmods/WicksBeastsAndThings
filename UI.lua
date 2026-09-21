@@ -118,7 +118,10 @@ function UI:BuildStrip()
     f:SetClampedToScreen(true)
     f:EnableMouse(true)
     f:RegisterForDrag("LeftButton")
-    f:SetScript("OnDragStart", function(s) if db and not db.stripLocked then s:StartMoving() end end)
+    f:SetScript("OnDragStart", function(s)
+        -- A lock stops a nudge, not a deliberate move: shift overrides it.
+        if Chrome:DragAllowed(db and db.stripLocked) then s:StartMoving() end
+    end)
     f:SetScript("OnDragStop", function(s)
         s:StopMovingOrSizing()
         if db then db.strip = db.strip or {}; Chrome:SavePosition(s, db.strip) end

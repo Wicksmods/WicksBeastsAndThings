@@ -506,8 +506,16 @@ function Bestiary:Window()
     d.rule2 = r2
 
     d.abilHead = label(d, 0, fy - 42, "")
+    -- Icons where there are icons, words where there are not. An atlas
+    -- recorded before the icon was captured still has the names, and a
+    -- name is worth more than a blank row.
+    d.abilBox = CreateFrame("Frame", nil, d)
+    d.abilBox:SetPoint("TOPLEFT", 0, fy - 55)
+    d.abilBox:SetPoint("BOTTOMRIGHT", 0, 0)
+    d.chips = {}
     d.abil = Chrome:Text(d, 11, C.fel)
-    d.abil:SetPoint("TOPLEFT", 0, fy - 55)
+    d.abilTop = fy - 55
+    d.abil:SetPoint("TOPLEFT", 0, d.abilTop)
     d.abil:SetPoint("BOTTOMRIGHT", 0, 0)
     d.abil:SetJustifyH("LEFT")
     d.abil:SetJustifyV("TOP")
@@ -556,6 +564,59 @@ function Bestiary:Window()
     f:SetScript("OnShow", function() Bestiary:RefreshWindow() end)
     if f.OnResized == nil then f.OnResized = function() Bestiary:RefreshWindow() end end
     return f
+end
+
+local CHIP, CHIP_GAP = 24, 3
+
+local function chip(d, i)
+    local b = d.chips[i]
+    if b then return b end
+    b = CreateFrame("Button", nil, d.abilBox)
+    b:SetSize(CHIP, CHIP)
+    b.icon = b:CreateTexture(nil, "ARTWORK")
+    b.icon:SetAllPoints()
+    b.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+    Chrome:AddBorder(b)
+    b:SetScript("OnEnter", function(s)
+        GameTooltip:SetOwner(s, "ANCHOR_RIGHT")
+        -- The real spell tooltip when the book gave us an id to ask with,
+        -- and the name when it did not. Never nothing.
+        local shown = false
+        if s.spellID and GameTooltip.SetSpellByID then
+            shown = pcall(GameTooltip.SetSpellByID, GameTooltip, s.spellID)
+        end
+        if not shown then
+            GameTooltip:ClearLines()
+            GameTooltip:AddLine(s.abilityName or "?", C.fel[1], C.fel[2], C.fel[3])
+        end
+        if s.passive then GameTooltip:AddLine("Passive", 0.6, 0.6, 0.6) end
+        GameTooltip:AddLine(s.shared and "Most families bring this" or "Sets this family apart",
+            0.5, 0.5, 0.5)
+        GameTooltip:Show()
+    end)
+    b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    d.chips[i] = b
+    return b
+end
+
+-- Lay the chips out left to right, wrapping at the width there is.
+local function layoutChips(d, entries)
+    for _, b in ipairs(d.chips) do b:Hide() end
+    local width = tonumber(d.abilBox:GetWidth()) or 0
+    if width <= 0 then width = 300 end
+    local perRow = math.max(1, math.floor((width + CHIP_GAP) / (CHIP + CHIP_GAP)))
+    for i, e in ipairs(entries) do
+        local b = chip(d, i)
+        local col, row = (i - 1) % perRow, math.floor((i - 1) / perRow)
+        b:SetPoint("TOPLEFT", col * (CHIP + CHIP_GAP), -row * (CHIP + CHIP_GAP))
+        b.icon:SetTexture(e.icon)
+        -- Shared abilities are plumbing, so they are greyed rather than
+        -- hidden: still there to point at, not competing for the eye.
+        b.icon:SetDesaturated(e.shared and true or false)
+        b.icon:SetAlpha(e.shared and 0.55 or 1)
+        b.abilityName, b.spellID, b.passive, b.shared = e.name, e.spellID, e.passive, e.shared
+        b:Show()
+    end
 end
 
 function Bestiary:Selected()
@@ -688,12 +749,34 @@ function Bestiary:RefreshWindow()
     if ns.beasts and rec.family then special, shared = ns.beasts:Known(rec.family) end
     if special then
         d.abilHead:SetText((rec.family or "ITS FAMILY"):upper() .. " BRINGS")
-        local parts = {}
-        if #special > 0 then parts[#parts + 1] = table.concat(special, ", ") end
-        if #shared > 0 then parts[#parts + 1] = "|cff8a8270" .. table.concat(shared, ", ") .. "|r" end
-        d.abil:SetText(table.concat(parts, "   "))
+        -- What sets the family apart leads; the plumbing follows, greyed.
+        local entries, missing = {}, {}
+        local function add(name, isShared)
+            local icon, spellID = ns.beasts:Art(rec.family, name)
+            if icon then
+                entries[#entries + 1] = {
+                    name = name, icon = icon, spellID = spellID, shared = isShared,
+                    passive = ns.beasts:IsPassive(rec.family, name),
+                }
+            else
+                missing[#missing + 1] = isShared and ("|cff8a8270" .. name .. "|r") or name
+            end
+        end
+        for _, n in ipairs(special) do add(n, false) end
+        for _, n in ipairs(shared) do add(n, true) end
+        layoutChips(d, entries)
+        d.abilBox:SetShown(#entries > 0)
+        d.abil:SetShown(#missing > 0)
+        d.abil:SetText(table.concat(missing, ", "))
+        -- The text falls under the chips when both are showing, so it only
+        -- takes the whole box when there are no chips at all.
+        d.abil:SetPoint("TOPLEFT", 0, d.abilTop - (#entries > 0 and 30 or 0))
     else
         d.abilHead:SetText("NOT TAMED LONG ENOUGH TO SAY")
+        layoutChips(d, {})
+        d.abilBox:Hide()
+        d.abil:Show()
+        d.abil:SetPoint("TOPLEFT", 0, d.abilTop)
         d.abil:SetText("|cff8a8270Its abilities are read from the pet spell book while it is out.|r")
     end
 end

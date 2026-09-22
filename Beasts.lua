@@ -43,7 +43,12 @@ local function petSpells()
         for i = 1, n do
             local got, info = pcall(SB.GetSpellBookItemInfo, i, bank)
             if got and type(info) == "table" and info.name and info.name ~= "" then
-                out[#out + 1] = { name = info.name, passive = info.isPassive and true or false }
+                out[#out + 1] = {
+                    name = info.name,
+                    passive = info.isPassive and true or false,
+                    icon = info.iconID,
+                    spellID = info.spellID or info.actionID,
+                }
             end
         end
         return out
@@ -57,6 +62,8 @@ local function petSpells()
     local ok, n = pcall(has)
     if not ok or type(n) ~= "number" then return out end
     local isPassive = rawget(_G, "IsPassiveSpell")
+    local textureOf = rawget(_G, "GetSpellBookItemTexture") or rawget(_G, "GetSpellTexture")
+    local infoOf = rawget(_G, "GetSpellBookItemInfo")
     for i = 1, n do
         local got, name = pcall(nameOf, i, "pet")
         if got and type(name) == "string" and name ~= "" then
@@ -65,7 +72,19 @@ local function petSpells()
                 local pok, p = pcall(isPassive, i, "pet")
                 passive = pok and p and true or false
             end
-            out[#out + 1] = { name = name, passive = passive }
+            local icon
+            if textureOf then
+                local tok, t = pcall(textureOf, i, "pet")
+                if tok then icon = t end
+            end
+            local spellID
+            if infoOf then
+                -- The older call answers (type, id), and the id is only a
+                -- spell when the type says so.
+                local iok, kind, id = pcall(infoOf, i, "pet")
+                if iok and kind == "SPELL" then spellID = id end
+            end
+            out[#out + 1] = { name = name, passive = passive, icon = icon, spellID = spellID }
         end
     end
     return out
@@ -84,10 +103,16 @@ function Beasts:Record()
 
     local rec = fams[family] or { abilities = {} }
     rec.abilities = rec.abilities or {}
+    -- The icon and the spell were read and thrown away for a while. They
+    -- are what lets the bestiary show an ability rather than name it.
+    rec.icons = rec.icons or {}
+    rec.spells = rec.spells or {}
     local added = {}
     for _, s in ipairs(spells) do
         if rec.abilities[s.name] == nil then added[#added + 1] = s.name end
         rec.abilities[s.name] = s.passive and "passive" or "active"
+        if s.icon then rec.icons[s.name] = s.icon end
+        if s.spellID then rec.spells[s.name] = s.spellID end
     end
     rec.seen = (rec.seen or 0) + 1
     fams[family] = rec
@@ -129,6 +154,20 @@ function Beasts:Known(family)
     table.sort(special)
     table.sort(shared)
     return special, shared, rec.seen or 0
+end
+
+-- What the bestiary needs to draw an ability rather than spell it out.
+function Beasts:Art(family, name)
+    local fams = store()
+    local rec = fams and family and fams[family]
+    if not rec then return nil end
+    return (rec.icons or {})[name], (rec.spells or {})[name]
+end
+
+function Beasts:IsPassive(family, name)
+    local fams = store()
+    local rec = fams and family and fams[family]
+    return rec and (rec.abilities or {})[name] == "passive" or false
 end
 
 function Beasts:Families()

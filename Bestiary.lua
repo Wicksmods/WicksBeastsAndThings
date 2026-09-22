@@ -251,7 +251,12 @@ function Bestiary:AttachPane(pane)
     forget:SetScript("OnClick", function()
         Bestiary:Forget()
         Bestiary:RefreshPane()
+        Bestiary:RefreshWindow()
     end)
+
+    local open = Chrome:Button(pane, "Open the bestiary", 120, 20)
+    open:SetPoint("BOTTOMLEFT", forget, "BOTTOMRIGHT", 6, 0)
+    open:SetScript("OnClick", function() Bestiary:Open() end)
 
     pane:SetScript("OnShow", function() Bestiary:RefreshPane() end)
     self:RefreshPane()
@@ -284,6 +289,10 @@ local function paneRow(pane, i)
     r.diet:SetPoint("RIGHT", r.age, "LEFT", -6, 0)
     r.diet:SetWordWrap(false)
     if r.diet.SetMaxLines then r.diet:SetMaxLines(1) end
+    -- The tab is a roster; the page is the window. Clicking a line here is
+    -- the way between them.
+    r:EnableMouse(true)
+    r:SetScript("OnMouseUp", function(s) if s.key then Bestiary:Open(s.key) end end)
     pane.rows[i] = r
     return r
 end
@@ -303,6 +312,7 @@ function Bestiary:RefreshPane()
     for _, r in ipairs(pane.rows) do r:Hide() end
     for i, rec in ipairs(list) do
         local r = paneRow(pane, i)
+        r.key = rec.key
         local out = rec.key == curKey
         r.name:SetText((out and "|cff4FC778> |r" or "") .. (rec.name or "?"))
         local fam = rec.family or "?"
@@ -321,6 +331,244 @@ function Bestiary:RefreshPane()
     if w and w > 0 then pane.list:SetWidth(w) end
 end
 
+
+-- ============================================================
+-- The window
+-- ============================================================
+--
+-- The kit tab is a roster and nothing more. This is the page: pick an
+-- animal on the left and the right says everything known about it,
+-- including what its family brings, which is the one thing the two
+-- records can only answer together.
+
+local W = { LIST = 170, ROW = 17 }
+
+local function detailLine(parent, y, size, color)
+    local fs = Chrome:Text(parent, size or 11, color)
+    fs:SetPoint("TOPLEFT", 0, y)
+    fs:SetPoint("TOPRIGHT", 0, y)
+    fs:SetJustifyH("LEFT")
+    return fs
+end
+
+function Bestiary:Window()
+    if self.win then return self.win end
+    local db = ns.A.db.profile
+    db.bestiaryWindow = db.bestiaryWindow or {}
+
+    local f = Chrome:NewPanel("WicksBestiaryWindow", {
+        title = "Bestiary", width = 540, height = 330,
+        resizable = true, minWidth = 420, minHeight = 240,
+        db = db.bestiaryWindow,
+    })
+    self.win = f
+    local c = f.content
+
+    -- Left: the roster.
+    local clip = CreateFrame("ScrollFrame", nil, c)
+    clip:SetPoint("TOPLEFT", 0, 0)
+    clip:SetPoint("BOTTOMLEFT", 0, 22)
+    clip:SetWidth(W.LIST)
+    local list = CreateFrame("Frame", nil, clip)
+    list:SetSize(W.LIST, 1)
+    clip:SetScrollChild(list)
+    clip:EnableMouseWheel(true)
+    clip:SetScript("OnMouseWheel", function(s, delta)
+        local range = math.max(0, (tonumber(list:GetHeight()) or 0) - (tonumber(s:GetHeight()) or 0))
+        if range <= 0 then return end
+        s:SetVerticalScroll(math.min(range, math.max(0, (tonumber(s:GetVerticalScroll()) or 0) - delta * 24)))
+    end)
+    f.clip, f.list, f.rows = clip, list, {}
+
+    local rule = Chrome:Texture(c, "ARTWORK", C.border)
+    rule:SetWidth(1)
+    rule:SetPoint("TOPLEFT", W.LIST + 8, 0)
+    rule:SetPoint("BOTTOMLEFT", W.LIST + 8, 0)
+
+    -- Right: the page.
+    local d = CreateFrame("Frame", nil, c)
+    d:SetPoint("TOPLEFT", W.LIST + 17, 0)
+    d:SetPoint("BOTTOMRIGHT", 0, 22)
+    f.detail = d
+
+    d.name = detailLine(d, 0, 14, C.fel)
+    d.sub = detailLine(d, -20, 11, C.muted)
+    d.diet = detailLine(d, -42, 11)
+    d.loyal = detailLine(d, -60, 11)
+    d.food = detailLine(d, -78, 11)
+    d.abilHead = detailLine(d, -102, 11, C.muted)
+    d.abil = detailLine(d, -118, 11, C.fel)
+    d.abil:SetPoint("BOTTOMRIGHT", 0, 0)
+    d.abil:SetJustifyV("TOP")
+    d.empty = detailLine(d, -60, 11, C.muted)
+    d.empty:SetText("Call a pet and it writes itself down. An animal in the stable reads nothing to the client, so nothing can be listed until it is out with you.")
+    d.empty:SetWordWrap(true)
+
+    -- Bottom row.
+    local forget = Chrome:Button(c, "Forget", 64, 19)
+    forget:SetPoint("BOTTOMRIGHT", 0, 0)
+    forget:SetScript("OnClick", function()
+        local rec = Bestiary:Selected()
+        if not rec then return end
+        Bestiary:Forget(rec.name)
+        Bestiary.selectedKey = nil
+        Bestiary:RefreshWindow()
+        Bestiary:RefreshPane()
+    end)
+    f.forget = forget
+
+    local pin = Chrome:Button(c, "Pin food", 74, 19)
+    pin:SetPoint("BOTTOMRIGHT", forget, "BOTTOMLEFT", -6, 0)
+    pin:SetScript("OnClick", function()
+        -- Only the animal that is out can be pinned to: the pin is read off
+        -- what the client says the pet will eat, and it says nothing about
+        -- an animal in the stable.
+        local rec, key = Bestiary:Current()
+        if not rec or key ~= Bestiary.selectedKey then return end
+        if rec.food then
+            Bestiary:Pin(nil)
+        else
+            local food = ns.Pet:BestFood()
+            if food then Bestiary:Pin(food.itemID) end
+        end
+        ns.Pet:UpdateFeedMacro()
+        Bestiary:RefreshWindow()
+    end)
+    f.pin = pin
+
+    f.count = Chrome:Text(c, 10, C.muted)
+    f.count:SetPoint("BOTTOMLEFT", 0, 4)
+
+    f:SetScript("OnShow", function() Bestiary:RefreshWindow() end)
+    if f.OnResized == nil then f.OnResized = function() Bestiary:RefreshWindow() end end
+    return f
+end
+
+function Bestiary:Selected()
+    local pets = store()
+    if not pets then return nil end
+    return self.selectedKey and pets[self.selectedKey] or nil
+end
+
+function Bestiary:Toggle()
+    local f = self:Window()
+    if f:IsShown() then f:Hide() else f:Show() end
+end
+
+function Bestiary:Open(key)
+    local f = self:Window()
+    if key then self.selectedKey = key end
+    f:Show()
+    self:RefreshWindow()
+end
+
+local function winRow(f, i)
+    local r = f.rows[i]
+    if r then return r end
+    r = CreateFrame("Button", nil, f.list)
+    r:SetHeight(W.ROW)
+    r:SetPoint("TOPLEFT", 0, -(i - 1) * W.ROW)
+    r:SetPoint("TOPRIGHT", 0, -(i - 1) * W.ROW)
+    r.hl = Chrome:Texture(r, "BACKGROUND", C.shadow)
+    r.hl:SetAllPoints()
+    r.hl:Hide()
+    r.label = Chrome:Text(r, 11)
+    r.label:SetPoint("LEFT", 4, 0)
+    r.label:SetJustifyH("LEFT")
+    r.tag = Chrome:Text(r, 10, C.fel)
+    r.tag:SetPoint("RIGHT", -4, 0)
+    r.tag:SetJustifyH("RIGHT")
+    r.label:SetPoint("RIGHT", r.tag, "LEFT", -4, 0)
+    r.label:SetWordWrap(false)
+    if r.label.SetMaxLines then r.label:SetMaxLines(1) end
+    r:SetScript("OnClick", function(s)
+        Bestiary.selectedKey = s.key
+        Bestiary:RefreshWindow()
+    end)
+    f.rows[i] = r
+    return r
+end
+
+function Bestiary:RefreshWindow()
+    local f = self.win
+    if not (f and f:IsShown()) then return end
+    local list = self:All()
+    local _, curKey = self:Current()
+
+    -- A selection that was forgotten, or none yet: fall to the top of the
+    -- roster so the page is never blank while there is something to show.
+    local pets = store()
+    if not (self.selectedKey and pets and pets[self.selectedKey]) then
+        self.selectedKey = list[1] and list[1].key or nil
+    end
+
+    for _, r in ipairs(f.rows) do r:Hide() end
+    for i, rec in ipairs(list) do
+        local r = winRow(f, i)
+        r.key = rec.key
+        r.label:SetText(rec.name or "?")
+        r.tag:SetText(rec.key == curKey and "out" or (rec.level and tostring(rec.level) or ""))
+        r.hl:SetShown(rec.key == self.selectedKey)
+        r:Show()
+    end
+    f.list:SetHeight(math.max(1, #list * W.ROW))
+    f.count:SetText(("%d animal%s"):format(#list, #list == 1 and "" or "s"))
+
+    local d = f.detail
+    local rec = self:Selected()
+    local has = rec ~= nil
+    for _, k in ipairs({ "name", "sub", "diet", "loyal", "food", "abilHead", "abil" }) do
+        d[k]:SetShown(has)
+    end
+    d.empty:SetShown(not has)
+    f.forget:SetShown(has)
+    f.pin:SetShown(has and rec.key == curKey)
+    if not has then return end
+
+    d.name:SetText(rec.name or "?")
+    local bits = {}
+    if rec.family and (rec.name or ""):lower() ~= rec.family:lower() then bits[#bits + 1] = rec.family end
+    if rec.level then bits[#bits + 1] = "level " .. rec.level end
+    if rec.key == curKey then bits[#bits + 1] = "out now"
+    elseif rec.lastSeen then bits[#bits + 1] = "last out " .. ago(rec.lastSeen) .. " ago" end
+    if rec.seen then bits[#bits + 1] = ("called %d time%s"):format(rec.seen, rec.seen == 1 and "" or "s") end
+    d.sub:SetText(table.concat(bits, "   "))
+
+    d.diet:SetText("Eats: " .. (rec.diet and #rec.diet > 0 and table.concat(rec.diet, ", ") or "not known"))
+
+    local lbits = {}
+    if rec.loyalty then lbits[#lbits + 1] = rec.loyalty end
+    if rec.trainingTotal then
+        lbits[#lbits + 1] = ("%s of %s training points spent"):format(
+            tostring(rec.trainingUsed or 0), tostring(rec.trainingTotal))
+    end
+    d.loyal:SetText(#lbits > 0 and table.concat(lbits, "   ") or "")
+
+    if rec.food then
+        local it = Core.Dialect.GetItemInfo(rec.food)
+        d.food:SetText("Feeds on: " .. ((it and it.name) or ("item " .. rec.food)))
+    elseif rec.key == curKey then
+        d.food:SetText("Feeds on: the best food in your bags")
+    else
+        d.food:SetText("")
+    end
+
+    -- The join the two records exist for: this animal, and what anything of
+    -- its family has been seen to bring.
+    local special, shared = nil, nil
+    if ns.beasts and rec.family then special, shared = ns.beasts:Known(rec.family) end
+    if special then
+        d.abilHead:SetText((rec.family or "Its family") .. " brings")
+        local out = {}
+        if #special > 0 then out[#out + 1] = table.concat(special, ", ") end
+        if #shared > 0 then out[#out + 1] = "|cff8a8270" .. table.concat(shared, ", ") .. "|r" end
+        d.abil:SetText(table.concat(out, "   "))
+    else
+        d.abilHead:SetText("")
+        d.abil:SetText("")
+    end
+end
+
 -- ============================================================
 
 function Bestiary:Init()
@@ -330,6 +578,7 @@ function Bestiary:Init()
         local function go()
             Core.safe(Bestiary.Record, Bestiary)
             if Bestiary.pane and Bestiary.pane:IsShown() then Bestiary:RefreshPane() end
+            Bestiary:RefreshWindow()
         end
         -- A pet that has just been called answers nothing for a moment.
         if C_Timer and C_Timer.After then C_Timer.After(1, go) else go() end

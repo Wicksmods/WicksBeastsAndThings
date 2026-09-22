@@ -26,6 +26,7 @@ local PROFILE_DEFAULTS = {
     strip         = {},
     window        = {},
     kitWindow     = {},
+    bestiaryWindow = {},
 }
 
 -- The bestiary is per character. Another hunter's animals are not yours,
@@ -210,6 +211,7 @@ A:RegisterSlash(function(_, msg)
         end
         return
     end
+    if lower == "bestiary" then ns.Bestiary:Toggle() return end
     if lower == "pets" or lower:match("^pets%s") then
         local rest = msg:match("^%a+%s+(.*)$")
         if rest == "clear" or rest == "forget" then
@@ -223,6 +225,7 @@ A:RegisterSlash(function(_, msg)
             ns.Bestiary:Report(function(line) A:Print(line) end)
         end
         if ns.Bestiary.pane then ns.Bestiary:RefreshPane() end
+        ns.Bestiary:RefreshWindow()
         return
     end
     if lower == "options" or lower == "config" then A:OpenOptions() return end
@@ -290,5 +293,5 @@ A:RegisterSlash(function(_, msg)
             tostring(Bst and Bst.why or "none")))
         return
     end
-    A:Print("commands: show | strip | lock | unlock | kit | cd | pets [name|clear] | options | ammo <count> | food [link|clear] | status")
+    A:Print("commands: show | strip | lock | unlock | kit | cd | bestiary | pets [name|clear] | options | ammo <count> | food [link|clear] | status")
 end, "/wbt", "/wbeasts")

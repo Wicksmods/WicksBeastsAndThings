@@ -66,6 +66,28 @@ function Ammo:State()
         if s.fires and s.ammoType and s.ammoType ~= s.fires then s.mismatch = true end
     end
     s.total = s.total or 0
+
+    -- How many the quivers hold. Every slot of every equipped quiver or
+    -- ammo pouch, by the bag family the client reports (1 quiver, 2
+    -- pouch), times the stack the ammo itself reports. 1768/2000 is what
+    -- a hunter reads at a glance; 1768 alone is a number to think about.
+    -- No such bag, no capacity, and the strip shows the plain count.
+    if s.itemID and D.GetContainerNumFreeSlots then
+        local slots = 0
+        for bag = 1, 4 do
+            local _, family = D.GetContainerNumFreeSlots(bag)
+            if type(family) == "number" and family > 0 and bit.band(family, 3) ~= 0 then
+                slots = slots + (D.GetContainerNumSlots(bag) or 0)
+            end
+        end
+        if slots > 0 then
+            local it = D.GetItemInfo(s.itemID)
+            local stack = it and it.stackCount
+            if type(stack) ~= "number" or stack <= 0 then stack = 200 end
+            s.quiverSlots = slots
+            s.capacity = slots * stack
+        end
+    end
     return s
 end
 

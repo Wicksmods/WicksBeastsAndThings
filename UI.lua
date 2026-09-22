@@ -79,6 +79,9 @@ local function ammoLines(tt, a)
     tt:AddLine(a.name, 1, 1, 1)
     tt:AddLine((a.spare or 0) > 0 and ("%d equipped, %d spare in bags"):format(a.count or 0, a.spare)
         or ("%d shots"):format(a.total or 0), 0.83, 0.78, 0.63)
+    if a.capacity then
+        tt:AddLine(("%d of the %d your quiver holds"):format(a.total or 0, a.capacity), 0.83, 0.78, 0.63)
+    end
     local warn = ns.db and ns.db.profile.ammoWarn or 200
     if a.mismatch then
         tt:AddLine(("Wrong ammo: %s fires %ss."):format(a.weapon or "your weapon", (a.fires or ""):lower()), RED[1], RED[2], RED[3])
@@ -473,7 +476,13 @@ function UI:RefreshAmmo()
             f.ammoIcon:SetDesaturated(false)
             f.ammoIcon:SetAlpha(1)
             local n = a.count or 0
-            f.ammoText:SetText((a.spare or 0) > 0 and ("%d +%d"):format(n, a.spare) or tostring(a.total or n))
+            -- With a quiver equipped the strip reads shots over what the
+            -- quiver holds; without one, the count as before.
+            if a.capacity then
+                f.ammoText:SetText(("%d/%d"):format(a.total or n, a.capacity))
+            else
+                f.ammoText:SetText((a.spare or 0) > 0 and ("%d +%d"):format(n, a.spare) or tostring(a.total or n))
+            end
         else
             f.ammoIcon:SetTexture("Interface\\Icons\\INV_Ammo_Arrow_01")
             f.ammoIcon:SetDesaturated(true)

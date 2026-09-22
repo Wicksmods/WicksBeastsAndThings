@@ -293,5 +293,9 @@ A:RegisterSlash(function(_, msg)
             tostring(Bst and Bst.why or "none")))
         return
     end
+    -- Name what came in. A bare help line for an unrecognised word looks
+    -- identical to a command that matched and then did nothing, and the
+    -- two need very different fixes.
+    if msg ~= "" then A:Print(("no command %q."):format(msg)) end
     A:Print("commands: show | strip | lock | unlock | kit | cd | bestiary | pets [name|clear] | options | ammo <count> | food [link|clear] | status")
 end, "/wbt", "/wbeasts")

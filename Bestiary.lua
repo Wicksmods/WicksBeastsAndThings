@@ -341,13 +341,58 @@ end
 -- including what its family brings, which is the one thing the two
 -- records can only answer together.
 
-local W = { LIST = 170, ROW = 17 }
+local W = { LIST = 178, ROW = 20, PORTRAIT = 46 }
 
-local function detailLine(parent, y, size, color)
-    local fs = Chrome:Text(parent, size or 11, color)
-    fs:SetPoint("TOPLEFT", 0, y)
-    fs:SetPoint("TOPRIGHT", 0, y)
+-- The game names its own pet icons after the family, so the path can be
+-- derived rather than listed. Only the families whose file name differs
+-- from the name the client prints need an entry here.
+local ICON_NAME = {
+    ["wind serpent"] = "WindSerpent",
+    ["carrion bird"] = "CarrionBird",
+    ["nether ray"]   = "Netherray",
+    ["dragonhawk"]   = "DragonHawk",
+}
+local ICON_DIR = "Interface\\Icons\\"
+local FALLBACK_ICON = ICON_DIR .. "Ability_Hunter_BeastCall"
+
+function Bestiary:FamilyIcon(family)
+    if not family or family == "" then return FALLBACK_ICON end
+    local key = family:lower()
+    local file = ICON_NAME[key] or family:gsub("%s+", "")
+    return ICON_DIR .. "Ability_Hunter_Pet_" .. file
+end
+
+-- The animal that is out has a real portrait; one in the stable has only
+-- its family icon, because the client will not draw a pet it cannot see.
+local function paintPortrait(tex, rec, isOut)
+    if isOut then
+        local fn = rawget(_G, "SetPortraitTexture")
+        if fn then
+            local ok = pcall(fn, tex, "pet")
+            if ok then
+                tex:SetTexCoord(0, 1, 0, 1)
+                return
+            end
+        end
+    end
+    tex:SetTexture(Bestiary:FamilyIcon(rec and rec.family))
+    -- Icons carry a border in the file; trimming the edge drops it.
+    tex:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+end
+
+local function label(parent, x, y, text)
+    local fs = Chrome:Text(parent, 9, C.muted)
+    fs:SetPoint("TOPLEFT", x, y)
+    fs:SetText(text)
+    return fs
+end
+
+local function value(parent, x, y, w, color)
+    local fs = Chrome:Text(parent, 12, color)
+    fs:SetPoint("TOPLEFT", x, y - 11)
+    fs:SetWidth(w)
     fs:SetJustifyH("LEFT")
+    fs:SetWordWrap(false)
     return fs
 end
 
@@ -357,8 +402,8 @@ function Bestiary:Window()
     db.bestiaryWindow = db.bestiaryWindow or {}
 
     local f = Chrome:NewPanel("WicksBestiaryWindow", {
-        title = "Bestiary", width = 540, height = 330,
-        resizable = true, minWidth = 420, minHeight = 240,
+        title = "Bestiary", width = 560, height = 340,
+        resizable = true, minWidth = 460, minHeight = 260,
         db = db.bestiaryWindow,
     })
     self.win = f
@@ -391,18 +436,87 @@ function Bestiary:Window()
     d:SetPoint("BOTTOMRIGHT", 0, 22)
     f.detail = d
 
-    d.name = detailLine(d, 0, 14, C.fel)
-    d.sub = detailLine(d, -20, 11, C.muted)
-    d.diet = detailLine(d, -42, 11)
-    d.loyal = detailLine(d, -60, 11)
-    d.food = detailLine(d, -78, 11)
-    d.abilHead = detailLine(d, -102, 11, C.muted)
-    d.abil = detailLine(d, -118, 11, C.fel)
+    -- Portrait, framed the way the rest of the suite frames things.
+    local pf = CreateFrame("Frame", nil, d)
+    pf:SetSize(W.PORTRAIT, W.PORTRAIT)
+    pf:SetPoint("TOPLEFT", 0, 0)
+    Chrome:AddBorder(pf)
+    d.portrait = pf:CreateTexture(nil, "ARTWORK")
+    d.portrait:SetPoint("TOPLEFT", 1, -1)
+    d.portrait:SetPoint("BOTTOMRIGHT", -1, 1)
+    d.portraitFrame = pf
+
+    local textX = W.PORTRAIT + 10
+    d.name = Chrome:Text(d, 15, C.fel)
+    d.name:SetPoint("TOPLEFT", textX, -2)
+    d.sub = Chrome:Text(d, 11, C.muted)
+    d.sub:SetPoint("TOPLEFT", textX, -21)
+    d.sub:SetPoint("RIGHT", d, "RIGHT", 0, 0)
+    d.sub:SetJustifyH("LEFT")
+    d.sub:SetWordWrap(false)
+
+    -- A dot rather than a word: the roster already says "out", and on the
+    -- page it wants to read as a state, not a label.
+    d.dot = Chrome:Texture(d, "OVERLAY", C.fel)
+    d.dot:SetSize(6, 6)
+    d.dot:SetPoint("TOPLEFT", textX, -38)
+    d.outText = Chrome:Text(d, 10, C.fel)
+    d.outText:SetPoint("TOPLEFT", textX + 11, -34)
+    d.outText:SetText("out with you now")
+
+    local r1 = Chrome:Texture(d, "ARTWORK", C.border)
+    r1:SetHeight(1)
+    r1:SetPoint("TOPLEFT", 0, -(W.PORTRAIT + 10))
+    r1:SetPoint("TOPRIGHT", 0, -(W.PORTRAIT + 10))
+    d.rule1 = r1
+
+    -- Three cells, so the numbers line up instead of running together in
+    -- one sentence.
+    local cy = -(W.PORTRAIT + 20)
+    d.lLevel = label(d, 0, cy, "LEVEL")
+    d.vLevel = value(d, 0, cy, 60)
+    d.lLoyal = label(d, 70, cy, "LOYALTY")
+    d.vLoyal = value(d, 70, cy, 130)
+    d.lTrain = label(d, 208, cy, "TRAINING")
+    d.vTrain = value(d, 208, cy, 90)
+
+    local dy = cy - 38
+    d.lDiet = label(d, 0, dy, "EATS")
+    d.diet = Chrome:Text(d, 11)
+    d.diet:SetPoint("TOPLEFT", 0, dy - 12)
+    d.diet:SetPoint("RIGHT", d, "RIGHT", 0, 0)
+    d.diet:SetJustifyH("LEFT")
+
+    local fy = dy - 32
+    d.lFood = label(d, 0, fy, "FEEDS ON")
+    d.foodIcon = d:CreateTexture(nil, "ARTWORK")
+    d.foodIcon:SetSize(14, 14)
+    d.foodIcon:SetPoint("TOPLEFT", 0, fy - 13)
+    d.foodIcon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+    d.food = Chrome:Text(d, 11)
+    d.food:SetPoint("TOPLEFT", 18, fy - 12)
+    d.food:SetPoint("RIGHT", d, "RIGHT", 0, 0)
+    d.food:SetJustifyH("LEFT")
+    d.food:SetWordWrap(false)
+
+    local r2 = Chrome:Texture(d, "ARTWORK", C.border)
+    r2:SetHeight(1)
+    r2:SetPoint("TOPLEFT", 0, fy - 32)
+    r2:SetPoint("TOPRIGHT", 0, fy - 32)
+    d.rule2 = r2
+
+    d.abilHead = label(d, 0, fy - 42, "")
+    d.abil = Chrome:Text(d, 11, C.fel)
+    d.abil:SetPoint("TOPLEFT", 0, fy - 55)
     d.abil:SetPoint("BOTTOMRIGHT", 0, 0)
+    d.abil:SetJustifyH("LEFT")
     d.abil:SetJustifyV("TOP")
-    d.empty = detailLine(d, -60, 11, C.muted)
+
+    d.empty = Chrome:Text(d, 11, C.muted)
+    d.empty:SetPoint("TOPLEFT", 0, -4)
+    d.empty:SetPoint("RIGHT", d, "RIGHT", 0, 0)
+    d.empty:SetJustifyH("LEFT")
     d.empty:SetText("Call a pet and it writes itself down. An animal in the stable reads nothing to the client, so nothing can be listed until it is out with you.")
-    d.empty:SetWordWrap(true)
 
     -- Bottom row.
     local forget = Chrome:Button(c, "Forget", 64, 19)
@@ -472,15 +586,22 @@ local function winRow(f, i)
     r.hl = Chrome:Texture(r, "BACKGROUND", C.shadow)
     r.hl:SetAllPoints()
     r.hl:Hide()
+    r.icon = r:CreateTexture(nil, "ARTWORK")
+    r.icon:SetSize(14, 14)
+    r.icon:SetPoint("LEFT", 3, 0)
+    r.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
     r.label = Chrome:Text(r, 11)
-    r.label:SetPoint("LEFT", 4, 0)
+    r.label:SetPoint("LEFT", 22, 0)
     r.label:SetJustifyH("LEFT")
-    r.tag = Chrome:Text(r, 10, C.fel)
+    r.tag = Chrome:Text(r, 10, C.muted)
     r.tag:SetPoint("RIGHT", -4, 0)
     r.tag:SetJustifyH("RIGHT")
     r.label:SetPoint("RIGHT", r.tag, "LEFT", -4, 0)
     r.label:SetWordWrap(false)
     if r.label.SetMaxLines then r.label:SetMaxLines(1) end
+    -- Hovering shows the row is live without pretending it is selected.
+    r:SetScript("OnEnter", function(s) if not s.chosen then s.hl:SetAlpha(0.5); s.hl:Show() end end)
+    r:SetScript("OnLeave", function(s) s.hl:SetAlpha(1); s.hl:SetShown(s.chosen == true) end)
     r:SetScript("OnClick", function(s)
         Bestiary.selectedKey = s.key
         Bestiary:RefreshWindow()
@@ -506,9 +627,12 @@ function Bestiary:RefreshWindow()
     for i, rec in ipairs(list) do
         local r = winRow(f, i)
         r.key = rec.key
+        r.chosen = rec.key == self.selectedKey
+        r.icon:SetTexture(self:FamilyIcon(rec.family))
         r.label:SetText(rec.name or "?")
-        r.tag:SetText(rec.key == curKey and "out" or (rec.level and tostring(rec.level) or ""))
-        r.hl:SetShown(rec.key == self.selectedKey)
+        r.tag:SetText(rec.key == curKey and "|cff4FC778out|r" or (rec.level and tostring(rec.level) or ""))
+        r.hl:SetAlpha(1)
+        r.hl:SetShown(r.chosen)
         r:Show()
     end
     f.list:SetHeight(math.max(1, #list * W.ROW))
@@ -517,40 +641,45 @@ function Bestiary:RefreshWindow()
     local d = f.detail
     local rec = self:Selected()
     local has = rec ~= nil
-    for _, k in ipairs({ "name", "sub", "diet", "loyal", "food", "abilHead", "abil" }) do
+    local out = has and rec.key == curKey
+    for _, k in ipairs({ "name", "sub", "diet", "food", "abilHead", "abil", "rule1", "rule2",
+                         "lLevel", "vLevel", "lLoyal", "vLoyal", "lTrain", "vTrain",
+                         "lDiet", "lFood", "foodIcon" }) do
         d[k]:SetShown(has)
     end
+    d.portraitFrame:SetShown(has)
+    d.dot:SetShown(out)
+    d.outText:SetShown(out)
     d.empty:SetShown(not has)
     f.forget:SetShown(has)
-    f.pin:SetShown(has and rec.key == curKey)
+    f.pin:SetShown(out)
     if not has then return end
 
+    paintPortrait(d.portrait, rec, out)
     d.name:SetText(rec.name or "?")
+
     local bits = {}
     if rec.family and (rec.name or ""):lower() ~= rec.family:lower() then bits[#bits + 1] = rec.family end
-    if rec.level then bits[#bits + 1] = "level " .. rec.level end
-    if rec.key == curKey then bits[#bits + 1] = "out now"
-    elseif rec.lastSeen then bits[#bits + 1] = "last out " .. ago(rec.lastSeen) .. " ago" end
+    if not out and rec.lastSeen then bits[#bits + 1] = "last out " .. ago(rec.lastSeen) .. " ago" end
     if rec.seen then bits[#bits + 1] = ("called %d time%s"):format(rec.seen, rec.seen == 1 and "" or "s") end
     d.sub:SetText(table.concat(bits, "   "))
 
-    d.diet:SetText("Eats: " .. (rec.diet and #rec.diet > 0 and table.concat(rec.diet, ", ") or "not known"))
+    d.vLevel:SetText(rec.level and tostring(rec.level) or "-")
+    d.vLoyal:SetText(rec.loyalty or "-")
+    d.vTrain:SetText(rec.trainingTotal
+        and ("%s / %s"):format(tostring(rec.trainingUsed or 0), tostring(rec.trainingTotal))
+        or "-")
 
-    local lbits = {}
-    if rec.loyalty then lbits[#lbits + 1] = rec.loyalty end
-    if rec.trainingTotal then
-        lbits[#lbits + 1] = ("%s of %s training points spent"):format(
-            tostring(rec.trainingUsed or 0), tostring(rec.trainingTotal))
-    end
-    d.loyal:SetText(#lbits > 0 and table.concat(lbits, "   ") or "")
+    d.diet:SetText(rec.diet and #rec.diet > 0 and table.concat(rec.diet, ", ") or "not known")
 
     if rec.food then
         local it = Core.Dialect.GetItemInfo(rec.food)
-        d.food:SetText("Feeds on: " .. ((it and it.name) or ("item " .. rec.food)))
-    elseif rec.key == curKey then
-        d.food:SetText("Feeds on: the best food in your bags")
+        d.foodIcon:SetTexture(it and it.icon or FALLBACK_ICON)
+        d.foodIcon:Show()
+        d.food:SetText((it and it.name) or ("item " .. rec.food))
     else
-        d.food:SetText("")
+        d.foodIcon:Hide()
+        d.food:SetText(out and "the best food in your bags" or "nothing pinned")
     end
 
     -- The join the two records exist for: this animal, and what anything of
@@ -558,14 +687,14 @@ function Bestiary:RefreshWindow()
     local special, shared = nil, nil
     if ns.beasts and rec.family then special, shared = ns.beasts:Known(rec.family) end
     if special then
-        d.abilHead:SetText((rec.family or "Its family") .. " brings")
-        local out = {}
-        if #special > 0 then out[#out + 1] = table.concat(special, ", ") end
-        if #shared > 0 then out[#out + 1] = "|cff8a8270" .. table.concat(shared, ", ") .. "|r" end
-        d.abil:SetText(table.concat(out, "   "))
+        d.abilHead:SetText((rec.family or "ITS FAMILY"):upper() .. " BRINGS")
+        local parts = {}
+        if #special > 0 then parts[#parts + 1] = table.concat(special, ", ") end
+        if #shared > 0 then parts[#parts + 1] = "|cff8a8270" .. table.concat(shared, ", ") .. "|r" end
+        d.abil:SetText(table.concat(parts, "   "))
     else
-        d.abilHead:SetText("")
-        d.abil:SetText("")
+        d.abilHead:SetText("NOT TAMED LONG ENOUGH TO SAY")
+        d.abil:SetText("|cff8a8270Its abilities are read from the pet spell book while it is out.|r")
     end
 end
 

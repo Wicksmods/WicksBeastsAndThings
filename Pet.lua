@@ -117,9 +117,13 @@ end
 function Pet:BestFood()
     local foods = self:Foods()
     if #foods == 0 then return nil end
+    -- The animal's own pin first. It is the one that knows what it eats;
+    -- the hunter-wide pin is only a fallback for a pet with no record yet.
+    local pinned = ns.Bestiary and ns.Bestiary:PinnedFood()
     local db = ns.db and ns.db.profile
-    if db and db.foodItem then
-        for _, f in ipairs(foods) do if f.itemID == db.foodItem then f.pinned = true; return f end end
+    if not pinned and db and db.foodItem then pinned = db.foodItem end
+    if pinned then
+        for _, f in ipairs(foods) do if f.itemID == pinned then f.pinned = true; return f end end
     end
     if db and db.preferCheap then return foods[#foods] end
     return foods[1]

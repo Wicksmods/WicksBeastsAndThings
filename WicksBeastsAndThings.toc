@@ -12,4 +12,5 @@ Core.lua
 Pet.lua
 Ammo.lua
 Beasts.lua
+Bestiary.lua
 UI.lua

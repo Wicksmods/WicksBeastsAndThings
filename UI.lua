@@ -22,6 +22,28 @@ local HAPPY  = { [1] = RED, [2] = AMBER, [3] = C.fel }
 local QUESTION = "Interface\\Icons\\INV_Misc_QuestionMark"
 
 local function tint(fs, c) fs:SetTextColor(c[1], c[2], c[3], c[4] or 1) end
+
+-- A colour table as the hex an escape code wants.
+local function hexOf(c)
+    return ("%02x%02x%02x"):format(math.floor(c[1] * 255 + 0.5), math.floor(c[2] * 255 + 0.5), math.floor(c[3] * 255 + 0.5))
+end
+
+-- 2000 reads as 2k, 3200 as 3.2k, 800 as 800. The strip is 96 pixels
+-- wide and the number that matters is the one on the left.
+local function abbrev(n)
+    if n < 1000 then return tostring(n) end
+    if n % 1000 == 0 then return ("%dk"):format(n / 1000) end
+    return ("%.1fk"):format(n / 1000)
+end
+
+-- How full the quiver is, as the colour of the count. Under a fifth is
+-- red, up to three fifths amber, above that the brand green.
+local function fillColor(total, capacity)
+    local pct = capacity > 0 and (total / capacity) or 0
+    if pct < 0.20 then return RED end
+    if pct <= 0.60 then return AMBER end
+    return C.fel
+end
 local function classCap(s) return s and (s:sub(1, 1) .. s:sub(2):lower()) or "" end
 
 local function petLines(tt, s)
@@ -479,7 +501,12 @@ function UI:RefreshAmmo()
             -- With a quiver equipped the strip reads shots over what the
             -- quiver holds; without one, the count as before.
             if a.capacity then
-                f.ammoText:SetText(("%d/%d"):format(a.total or n, a.capacity))
+                -- The count carries the colour; the capacity stays quiet.
+                -- Wrong ammo still paints the whole thing red.
+                local total = a.total or n
+                local fill = a.mismatch and RED or fillColor(total, a.capacity)
+                f.ammoText:SetText(("|cff%s%d|r/%s"):format(hexOf(fill), total, abbrev(a.capacity)))
+                color = a.mismatch and RED or C.text
             else
                 f.ammoText:SetText((a.spare or 0) > 0 and ("%d +%d"):format(n, a.spare) or tostring(a.total or n))
             end

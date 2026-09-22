@@ -282,6 +282,12 @@ A:RegisterSlash(function(_, msg)
         A:Print(("ammo %s  count %s  bags %s  needed %s  mismatch %s"):format(
             tostring(a.name or "none"), tostring(a.count), tostring(a.bagCount), tostring(a.needed), tostring(a.mismatch)))
         A:Print("feed macro: " .. (ns.Pet.lastMacro or ""):gsub("\n", " | "))
+        local Bst = ns.Bestiary
+        local cur = Bst and Bst:Current()
+        A:Print(("bestiary %d recorded  out now %s  last skip %s"):format(
+            Bst and Bst:Count() or -1,
+            cur and (cur.name or "?") or "none",
+            tostring(Bst and Bst.why or "none")))
         return
     end
     A:Print("commands: show | strip | lock | unlock | kit | cd | pets [name|clear] | options | ammo <count> | food [link|clear] | status")

@@ -47,12 +47,15 @@ end
 -- last known value alone rather than overwriting it with nothing.
 function Bestiary:Record()
     local pets = store()
-    if not pets then return nil end
+    if not pets then self.why = "no character store" return nil end
     local s = ns.Pet and ns.Pet:State()
-    if not (s and s.exists and s.name and s.name ~= "") then return nil end
+    if not s then self.why = "Pet:State returned nothing" return nil end
+    if not s.exists then self.why = "no pet out" return nil end
+    if not s.name or s.name == "" then self.why = "the client would not name the pet" return nil end
 
     local key = self:Key(s.name, s.family)
-    if not key then return nil end
+    if not key then self.why = "no key for " .. tostring(s.name) return nil end
+    self.why = nil
     local rec = pets[key]
     local isNew = rec == nil
     rec = rec or { name = s.name, family = s.family, firstSeen = time and time() or 0, seen = 0 }
@@ -175,6 +178,14 @@ end
 -- Report
 -- ============================================================
 
+-- An untamed name is the family name, so printing both gives "Crab Crab".
+function Bestiary:Title(rec)
+    local name, family = rec.name or "?", rec.family
+    if not family or family == "" then return name end
+    if name:lower() == family:lower() then return name end
+    return name .. "  " .. family
+end
+
 function Bestiary:Report(print_)
     local list = self:All()
     if #list == 0 then
@@ -184,12 +195,13 @@ function Bestiary:Report(print_)
     local _, curKey = self:Current()
     print_(("%d animal%s recorded:"):format(#list, #list == 1 and "" or "s"))
     for _, rec in ipairs(list) do
-        print_(("  %s%s  %s%s  %s"):format(
-            rec.key == curKey and "> " or "  ",
-            rec.name or "?",
-            rec.family or "?",
-            rec.level and (" " .. rec.level) or "",
-            rec.diet and #rec.diet > 0 and table.concat(rec.diet, ", ") or "diet unknown"))
+        -- Out at the end rather than a marker at the front: a leading glyph
+        -- is lost in a chat frame, a trailing word is not.
+        print_(("  %s%s%s%s"):format(
+            self:Title(rec),
+            rec.level and ("  " .. rec.level) or "",
+            rec.diet and #rec.diet > 0 and ("  " .. table.concat(rec.diet, ", ")) or "  diet unknown",
+            rec.key == curKey and "  (out)" or ""))
     end
 end
 
@@ -293,7 +305,9 @@ function Bestiary:RefreshPane()
         local r = paneRow(pane, i)
         local out = rec.key == curKey
         r.name:SetText((out and "|cff4FC778> |r" or "") .. (rec.name or "?"))
-        r.family:SetText((rec.family or "?") .. (rec.level and ("  " .. rec.level) or ""))
+        local fam = rec.family or "?"
+        if (rec.name or ""):lower() == fam:lower() then fam = "" end
+        r.family:SetText(fam .. (rec.level and ((fam ~= "" and "  " or "") .. rec.level) or ""))
         local bits = {}
         if rec.diet and #rec.diet > 0 then bits[#bits + 1] = table.concat(rec.diet, ", ") end
         if rec.loyalty then bits[#bits + 1] = rec.loyalty end

@@ -66,6 +66,20 @@ local A = Core:NewAddon("WicksBeastsAndThings", {
     version  = ns.version,
     savedVar = "WicksBeastsSaved",
     defaults = { profile = PROFILE_DEFAULTS, char = CHAR_DEFAULTS, global = {} },
+    -- The family atlas is a cache and the roster is not, so only one of
+    -- them belongs in the settings store.
+    --
+    -- The atlas rebuilds itself: it is read from the pet spell book every
+    -- time an animal is out. The roster cannot, because the client will not
+    -- say anything about a pet sitting in a stable, so losing it means
+    -- calling every animal again to get it back.
+    --
+    -- It matters because the store is small. Sixty macros of 240 characters
+    -- is about fourteen kilobytes for every Wick addon put together, and
+    -- five recorded families already come to ten on their own. Left in, a
+    -- hunter with a normal collection would crowd out the settings of every
+    -- other addon in the suite.
+    storeExclude = { "global" },
 })
 ns.A = A
 

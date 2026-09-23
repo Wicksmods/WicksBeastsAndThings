@@ -39,7 +39,7 @@ if not Core then
 end
 local D, R = Core.Dialect, Core.Restrict
 
-ns.version = "0.1.0"
+ns.version = "0.9.0"
 
 local PROFILE_DEFAULTS = {
     ammoWarn      = 200,     -- the ammo row turns red below this many shots

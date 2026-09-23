@@ -1,5 +1,11 @@
 # Wick's Beasts and Things - Changelog
 
+## 0.9.0
+
+One version across the suite for the Forever beta. Every addon carried a
+number of its own that said nothing about how finished it was, so they are
+aligned here and the suite goes to 1.0.0 together at launch.
+
 ## Unreleased
 
 - Beast atlas. Reads your pet's spell book whenever one is out and files

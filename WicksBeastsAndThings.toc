@@ -2,7 +2,7 @@
 ## Title: Wick's Beasts and Things
 ## Notes: Hunter loadout kit for World of Warcraft: Forever. Pet care with one-key feeding, ammo watch, talents, pre-pull checklist, racials.
 ## Author: Wick
-## Version: 0.1.0
+## Version: 0.9.0
 ## OptionalDeps: WickCore
 ## SavedVariables: WicksBeastsSaved
 ## X-Website: https://wicksmods.com

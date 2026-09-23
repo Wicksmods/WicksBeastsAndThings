@@ -17,6 +17,7 @@
 -- it. The pin belongs to the animal.
 
 local ADDON, ns = ...
+if not WickCore then return end   -- said once in Core.lua
 local Core = WickCore
 local Chrome = Core.Chrome
 local C = Chrome.Colors

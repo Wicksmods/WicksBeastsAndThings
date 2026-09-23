@@ -7,6 +7,7 @@
 -- all (thrown weapons and wands do not).
 
 local ADDON, ns = ...
+if not WickCore then return end   -- said once in Core.lua
 local Core = WickCore
 local D, R = Core.Dialect, Core.Restrict
 

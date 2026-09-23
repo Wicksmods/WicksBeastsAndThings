@@ -15,6 +15,7 @@
 -- right by construction on whatever the client actually does.
 
 local ADDON, ns = ...
+if not WickCore then return end   -- said once in Core.lua
 local Core = WickCore
 local D = Core.Dialect
 local Chrome = Core.Chrome

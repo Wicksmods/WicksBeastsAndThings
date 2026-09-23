@@ -3,7 +3,7 @@
 ## Notes: Hunter loadout kit for World of Warcraft: Forever. Pet care with one-key feeding, ammo watch, talents, pre-pull checklist, racials.
 ## Author: Wick
 ## Version: 0.1.0
-## Dependencies: WickCore
+## OptionalDeps: WickCore
 ## SavedVariables: WicksBeastsSaved
 ## X-Website: https://wicksmods.com
 ## X-WickCore: WickCore-1.0

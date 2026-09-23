@@ -8,6 +8,7 @@
 -- to "/cast Feed Pet" followed by "/use" of the chosen food.
 
 local ADDON, ns = ...
+if not WickCore then return end   -- said once in Core.lua
 local Core = WickCore
 local D, R = Core.Dialect, Core.Restrict
 

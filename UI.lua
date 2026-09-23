@@ -9,6 +9,7 @@
 -- turn secret in combat simply stop updating and the strip says so.
 
 local ADDON, ns = ...
+if not WickCore then return end   -- said once in Core.lua
 local Core = WickCore
 local Chrome, R = Core.Chrome, Core.Restrict
 local C = Chrome.Colors

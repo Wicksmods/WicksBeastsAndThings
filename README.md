@@ -1,3 +1,4 @@
+<p align="center"><img src="images/wick-thumb-beasts.png" alt="Wick's Beasts and Things"></p>
 # Wick's Beasts and Things
 
 > Hunter loadout kit for World of Warcraft: Forever. Pet care with one-key feeding, ammo watch, talents, pre-pull checklist, racials.

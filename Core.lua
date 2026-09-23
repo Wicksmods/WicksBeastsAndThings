@@ -51,34 +51,19 @@ local PROFILE_DEFAULTS = {
     strip         = {},
     window        = {},
     kitWindow     = {},
-    bestiaryWindow = {},
-}
-
--- The bestiary is per character. Another hunter's animals are not yours,
--- and a hunter owns a handful at most, so the whole roster is small enough
--- to ride along in the settings store rather than be treated as a cache.
-local CHAR_DEFAULTS = {
-    pets = {},
 }
 
 local A = Core:NewAddon("WicksBeastsAndThings", {
     title    = "Wick's Beasts and Things",
     version  = ns.version,
     savedVar = "WicksBeastsSaved",
-    defaults = { profile = PROFILE_DEFAULTS, char = CHAR_DEFAULTS, global = {} },
-    -- The family atlas is a cache and the roster is not, so only one of
-    -- them belongs in the settings store.
-    --
-    -- The atlas rebuilds itself: it is read from the pet spell book every
-    -- time an animal is out. The roster cannot, because the client will not
-    -- say anything about a pet sitting in a stable, so losing it means
-    -- calling every animal again to get it back.
-    --
-    -- It matters because the store is small. Sixty macros of 240 characters
-    -- is about fourteen kilobytes for every Wick addon put together, and
-    -- five recorded families already come to ten on their own. Left in, a
-    -- hunter with a normal collection would crowd out the settings of every
-    -- other addon in the suite.
+    defaults = { profile = PROFILE_DEFAULTS, global = {} },
+    -- The family atlas is a cache, so it is kept out of the settings
+    -- store. It is read back from the pet spell book every time an animal
+    -- is out, and the store is small: sixty macros of 240 characters is
+    -- about fourteen kilobytes for every Wick addon put together, and five
+    -- recorded families came to ten on their own. Left in, one hunter's
+    -- collection would crowd out the settings of the whole suite.
     storeExclude = { "global" },
 })
 ns.A = A
@@ -136,8 +121,6 @@ function A:OnInitialize()
         tabs = {
             { id = "beasts", label = "Beasts",
               attach = function(pane) if ns.beasts then ns.beasts:AttachPane(pane) end end },
-            { id = "bestiary", label = "Bestiary",
-              attach = function(pane) if ns.Bestiary then ns.Bestiary:AttachPane(pane) end end },
         },
         checklist = {
             { label = "Aspect up",
@@ -175,7 +158,6 @@ function A:OnEnable()
     end
     if ns.Pet and ns.Pet.Init then ns.Pet:Init() end
     if ns.Ammo and ns.Ammo.Init then ns.Ammo:Init() end
-    if ns.Bestiary and ns.Bestiary.Init then ns.Bestiary:Init() end
     if ns.UI and ns.UI.Init then ns.UI:Init() end
     if self.cooldowns then self.cooldowns:Init() end
     if ns.beasts then ns.beasts:Init() end
@@ -250,23 +232,6 @@ A:RegisterSlash(function(_, msg)
         end
         return
     end
-    if lower == "bestiary" then ns.Bestiary:Toggle() return end
-    if lower == "pets" or lower:match("^pets%s") then
-        local rest = msg:match("^%a+%s+(.*)$")
-        if rest == "clear" or rest == "forget" then
-            ns.Bestiary:Forget()
-            A:Print("bestiary cleared.")
-        elseif rest and rest ~= "" then
-            local gone, name = ns.Bestiary:Forget(rest)
-            if gone then A:Print("forgot " .. (name or rest) .. ".")
-            else A:Print("no animal recorded by that name.") end
-        else
-            ns.Bestiary:Report(function(line) A:Print(line) end)
-        end
-        if ns.Bestiary.pane then ns.Bestiary:RefreshPane() end
-        ns.Bestiary:RefreshWindow()
-        return
-    end
     if lower == "options" or lower == "config" then A:OpenOptions() return end
     local db = A.db.profile
     if lower:match("^ammo") then
@@ -281,35 +246,19 @@ A:RegisterSlash(function(_, msg)
         local arg = msg:match("^%a+%s+(.+)$")
         if not arg then
             local food = ns.Pet:BestFood()
-            local rec = ns.Bestiary:Current()
-            if rec and rec.food then
-                A:Print(("pinned for %s: item %d"):format(rec.name or "this pet", rec.food))
-            elseif db.foodItem then
-                A:Print("pinned food: item " .. tostring(db.foodItem) .. " (for any pet)")
-            else
-                A:Print("no pinned food; feeding the best food in bags.")
-            end
+            A:Print(db.foodItem and ("pinned food: item " .. tostring(db.foodItem))
+                or "no pinned food; feeding the best food in bags.")
             A:Print(food and ("next feed: %s x%d"):format(food.name or "?", food.count or 0) or "nothing in your bags that the pet will eat.")
             return
         end
         if arg:lower() == "clear" or arg:lower() == "off" then
-            -- Clear both, or clearing with a pet out leaves the hunter-wide
-            -- pin quietly in force and looks like the command did nothing.
             db.foodItem = false
-            ns.Bestiary:Pin(nil)
             A:Print("pinned food cleared.")
         else
             local id = tonumber(arg) or tonumber(arg:match("item:(%d+)") or "")
             if not id then A:Print("give an item link or item ID: /wbt food [Haunch of Meat]") return end
-            -- A cat and a boar do not eat the same thing, so the pin belongs
-            -- to the animal whenever there is one to pin it to.
-            local who = ns.Bestiary:Pin(id)
-            if who then
-                A:Print(("pinned food for %s: item %d"):format(who, id))
-            else
-                db.foodItem = id
-                A:Print("no pet out, so pinned for any pet: item " .. id)
-            end
+            db.foodItem = id
+            A:Print("pinned food: item " .. id)
         end
         ns.Pet:UpdateFeedMacro()
         ns.UI:Refresh()
@@ -324,17 +273,11 @@ A:RegisterSlash(function(_, msg)
         A:Print(("ammo %s  count %s  bags %s  needed %s  mismatch %s"):format(
             tostring(a.name or "none"), tostring(a.count), tostring(a.bagCount), tostring(a.needed), tostring(a.mismatch)))
         A:Print("feed macro: " .. (ns.Pet.lastMacro or ""):gsub("\n", " | "))
-        local Bst = ns.Bestiary
-        local cur = Bst and Bst:Current()
-        A:Print(("bestiary %d recorded  out now %s  last skip %s"):format(
-            Bst and Bst:Count() or -1,
-            cur and (cur.name or "?") or "none",
-            tostring(Bst and Bst.why or "none")))
         return
     end
     -- Name what came in. A bare help line for an unrecognised word looks
     -- identical to a command that matched and then did nothing, and the
     -- two need very different fixes.
     if msg ~= "" then A:Print(("no command %q."):format(msg)) end
-    A:Print("commands: show | strip | lock | unlock | kit | cd | bestiary | pets [name|clear] | options | ammo <count> | food [link|clear] | status")
+    A:Print("commands: show | strip | lock | unlock | kit | cd | options | ammo <count> | food [link|clear] | status")
 end, "/wbt", "/wbeasts")

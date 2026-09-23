@@ -105,16 +105,10 @@ function Beasts:Record()
 
     local rec = fams[family] or { abilities = {} }
     rec.abilities = rec.abilities or {}
-    -- The icon and the spell were read and thrown away for a while. They
-    -- are what lets the bestiary show an ability rather than name it.
-    rec.icons = rec.icons or {}
-    rec.spells = rec.spells or {}
     local added = {}
     for _, s in ipairs(spells) do
         if rec.abilities[s.name] == nil then added[#added + 1] = s.name end
         rec.abilities[s.name] = s.passive and "passive" or "active"
-        if s.icon then rec.icons[s.name] = s.icon end
-        if s.spellID then rec.spells[s.name] = s.spellID end
     end
     rec.seen = (rec.seen or 0) + 1
     fams[family] = rec
@@ -156,54 +150,6 @@ function Beasts:Known(family)
     table.sort(special)
     table.sort(shared)
     return special, shared, rec.seen or 0
-end
-
--- Anything filed before the icon was captured has the ability name and
--- nothing else, and only the family of the pet that is out can be read
--- again. Rather than make you summon every animal in the stable, ask the
--- client to resolve the name: it knows the spell whether or not the pet
--- is with you.
---
--- Kept out of the saved atlas on purpose. A name can resolve to a spell
--- that merely shares it, so a real read from the pet spell book has to be
--- able to overwrite this, and it can only do that if this never persists.
-local resolved = {}
-
-local function byName(name)
-    local hit = resolved[name]
-    if hit ~= nil then
-        if hit == false then return nil end
-        return hit.icon, hit.spellID
-    end
-    local ok, info = pcall(D.GetSpellInfo, name)
-    if ok and type(info) == "table" and info.icon then
-        resolved[name] = { icon = info.icon, spellID = info.spellID }
-        return info.icon, info.spellID
-    end
-    resolved[name] = false
-    return nil
-end
-
--- Drop the name lookups. Only the harness needs this, to check both the
--- resolved case and the case where the client cannot place a name.
-function Beasts:ForgetResolved() resolved = {} end
-
--- What the bestiary needs to draw an ability rather than spell it out.
-function Beasts:Art(family, name)
-    local fams = store()
-    local rec = fams and family and fams[family]
-    if not rec then return nil end
-    -- What the spell book gave us wins; the name lookup only fills gaps.
-    local icon, spellID = (rec.icons or {})[name], (rec.spells or {})[name]
-    if icon then return icon, spellID end
-    local gi, gs = byName(name)
-    return gi, spellID or gs
-end
-
-function Beasts:IsPassive(family, name)
-    local fams = store()
-    local rec = fams and family and fams[family]
-    return rec and (rec.abilities or {})[name] == "passive" or false
 end
 
 function Beasts:Families()
